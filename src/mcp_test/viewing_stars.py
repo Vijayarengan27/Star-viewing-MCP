@@ -1,16 +1,25 @@
+from .positions import get_viewing_time
+
+import os, sys
 from mcp.server import MCPServer
 import requests
-import datetime
-import os, sys
+from datetime import datetime, timedelta, time, timezone
+
 from dotenv import load_dotenv
 import base64
 import requests_cache
+import yaml
+
+
+
+
 
 load_dotenv()
 
 mcp = MCPServer("nasa_test")
 cached = requests_cache.CachedSession('nasa_cache',expire_after=3600)  # caches the photo for an hour
 w_cached = requests_cache.CachedSession('weather_cache', expire_after=900)  # cache for weather info
+IST_zone = timezone(timedelta(hours=5, minutes=30))  # helpful in calculating the indian time 
 
 def _get_image_of_the_day(date):
 
@@ -96,6 +105,73 @@ def get_weather(city:str, state:str, country:str):
         "timezone": "Asia/Singapore"}
     responses = w_cached.get(url, params = params)
     return responses.json()
+
+
+def get_stars_and_planets(city:str, state:str, country:str):
+    """ Gets visible stars and planets for the given location that can be seen at the night and their
+    respective constellations"""
+
+    url = "https://spacecatalog.org/api/v1/visible"
+    addy = [city, state, country]
+    
+    query_params = {
+    "name": ', '.join(addy),
+    "count": 1,          # Number of search results to return
+    "language": "en",
+    "format": "json"}
+
+    response = cached.get(
+        "https://geocoding-api.open-meteo.com/v1/search",
+        params=query_params
+    )
+
+    if response.status_code == 200:
+        data = response.json()
+        
+    # Extract results array
+    results = data.get("results", [])
+    for spot in results:  # just running for one as of now
+        lat = spot.get("latitude")
+        lon = spot.get("longitude")
+    params = {
+        "lat": lat,
+        "lon": lon,
+        "time": datetime.combine(datetime.today().date(), time(19,30,0),tzinfo=IST_zone).isoformat()
+    }
+    response = w_cached.get(url,params=params)
+    r = response.json()
+    print(r)
+
+    with open("src\\mcp_test\\objects.yml", "r") as f:
+        data = yaml.safe_load(f)
+
+    wanted = {key : set(values) for key,values in data.items()}
+    dynamic_lists = {}
+
+    for key in wanted.keys():
+        dynamic_lists[key] = []
+        for val in wanted[key]:
+            for rep in r.get('objects',[]):
+
+                if key.lower() == rep.get('category').lower() and val.lower() == rep.get('name').lower():
+                    dynamic_lists[key].append(rep)
+                    break
+
+    # get the viewing time range at night for the stars
+    view_time = get_viewing_time(dynamic_lists['star'])
+
+    
+
+
+
+
+    
+
+
+if __name__ == "__main__":
+    get_stars_and_planets("Hyderabad", "Telangana", "india")
+
+
      
     
 
