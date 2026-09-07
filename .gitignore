@@ -12,3 +12,5 @@ wheels/
 # env file
 .env
 
+# cached session files
+*.sqlite

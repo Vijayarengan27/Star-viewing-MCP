@@ -10,6 +10,7 @@ load_dotenv()
 
 mcp = MCPServer("nasa_test")
 cached = requests_cache.CachedSession('nasa_cache',expire_after=3600)  # caches the photo for an hour
+w_cached = requests_cache.CachedSession('weather_cache', expire_after=900)  # cache for weather info
 
 def _get_image_of_the_day(date):
 
@@ -31,26 +32,27 @@ def show_image_of_the_day():
 
     response = _get_image_of_the_day(datetime.date.today().isoformat())
 
+    result = [{"Title": response["title"], "Explanation": response["explanation"]}]
+
     if response["media_type"] == "image":
         image_response = requests.get(response['url'])
         base64_data = base64.b64encode(image_response.content).decode("utf-8")
         mime = image_response.headers.get('content-type')
     
         # Return using the image content type
-        return [
+        result.append(
             {
                 "type": "image",
                 "data": base64_data,
                 "mimeType": mime
-            }
-        ]
+            })
     else:
-        return [
+        result.append(
         {
             "type": "text",
             "text": f"Here is the video of the day: [Play Video]({response['url']})"
-        }
-    ]
+        })
+    return result
 
 
 def _get_location(city:str, state:str, country:str):
@@ -64,7 +66,7 @@ def _get_location(city:str, state:str, country:str):
     "language": "en",
     "format": "json"}
 
-    response = requests.get(
+    response = w_cached.get(
         "https://geocoding-api.open-meteo.com/v1/search",
         params=query_params
     )
@@ -92,7 +94,7 @@ def get_weather(city:str, state:str, country:str):
         "daily": ["uv_index_max", "sunrise", "sunset", "moonrise", "moonset"],
         "current": ["temperature_2m", "relative_humidity_2m", "apparent_temperature", "wind_speed_10m", "wind_direction_10m", "rain", "precipitation"],
         "timezone": "Asia/Singapore"}
-    responses = cached.get(url, params = params)
+    responses = w_cached.get(url, params = params)
     return responses.json()
      
     
