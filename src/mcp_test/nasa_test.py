@@ -1,0 +1,99 @@
+from mcp.server import MCPServer
+import requests
+import datetime
+import os, sys
+from dotenv import load_dotenv
+import base64
+import requests_cache
+
+load_dotenv()
+
+mcp = MCPServer("nasa_test")
+cached = requests_cache.CachedSession('nasa_cache',expire_after=3600)  # caches the photo for an hour
+
+def _get_image_of_the_day(date):
+
+    """Gets the image of the day from NASA """
+
+    query_params = {'date':date,
+                    'api_key': os.getenv("API_KEY")}
+    response = cached.get(url="https://api.nasa.gov/planetary/apod",
+                            params=query_params)
+    remaining = response.headers.get("X-RateLimit-Remaining")
+    print(f"{remaining} attempts left",file=sys.stderr)
+
+    return response.json()
+
+@mcp.tool()
+def show_image_of_the_day():
+
+    """Displays the image url or plays the mp4 file"""
+
+    response = _get_image_of_the_day(datetime.date.today().isoformat())
+
+    if response["media_type"] == "image":
+        image_response = requests.get(response['url'])
+        base64_data = base64.b64encode(image_response.content).decode("utf-8")
+        mime = image_response.headers.get('content-type')
+    
+        # Return using the image content type
+        return [
+            {
+                "type": "image",
+                "data": base64_data,
+                "mimeType": mime
+            }
+        ]
+    else:
+        return [
+        {
+            "type": "text",
+            "text": f"Here is the video of the day: [Play Video]({response['url']})"
+        }
+    ]
+
+
+def _get_location(city:str, state:str, country:str):
+    """Gets the given location as latitude and longitude"""
+
+    addy = [city, state, country]
+
+    query_params = {
+    "name": ', '.join(addy),
+    "count": 1,          # Number of search results to return
+    "language": "en",
+    "format": "json"}
+
+    response = requests.get(
+        "https://geocoding-api.open-meteo.com/v1/search",
+        params=query_params
+    )
+
+    if response.status_code == 200:
+        data = response.json()
+        
+    # Extract results array
+    results = data.get("results", [])
+    for spot in results:  # just running for one as of now
+        lat = spot.get("latitude")
+        lon = spot.get("longitude")
+
+    return lat, lon
+        
+@mcp.tool()
+def get_weather(city:str, state:str, country:str):
+    """ Gets the hourly weather forecast of the given location"""
+    
+    lat, lon = _get_location(city=city, state=state, country=country)  # hardcoded rn, but need to make it dynamic
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "daily": ["uv_index_max", "sunrise", "sunset", "moonrise", "moonset"],
+        "current": ["temperature_2m", "relative_humidity_2m", "apparent_temperature", "wind_speed_10m", "wind_direction_10m", "rain", "precipitation"],
+        "timezone": "Asia/Singapore"}
+    responses = cached.get(url, params = params)
+    return responses.json()
+     
+    
+
