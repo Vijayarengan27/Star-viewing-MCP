@@ -158,7 +158,7 @@ def get_stars_and_planets(city:str, state:str, country:str):
                     break
 
     # get the viewing time range at night for the stars
-    view_time = get_viewing_time(dynamic_lists['star'])
+    view_time = get_viewing_time(dynamic_lists['star'], lat, lon)
 
     
 
