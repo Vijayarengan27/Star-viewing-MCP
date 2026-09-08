@@ -1,7 +1,7 @@
 import datetime
 import math
 
-def get_viewing_time(stars: list[dict], latitude: int, longitude: int):
+def get_star_position(stars: list[dict], latitude: int, longitude: int):
     """ Calculates the relative positions of the stars and charts the movement of them for the
     entire night time for a particular location"""
 
@@ -44,23 +44,46 @@ def get_viewing_time(stars: list[dict], latitude: int, longitude: int):
     # normalize it
     gmst_deg %= 360
 
-    # normalize longitude
-    longitude %= 360
-
     # local sidereal time in degrees and normalized
     lst = (gmst_deg + longitude) % 360
 
     # Hour angle in degrees for each star and normalized
     right_ascension = stars.get('ra_deg', None)
-    H = (lst - right_ascension) % 360
+    H = (lst - right_ascension + 180) % 360 - 180
 
     # get declination of the star - range [-90, 90], no need to normalize here
     declination = stars.get('dec_deg', None)
 
-    # altitude angle
+    # altitude angle calculation, convert relevant angles to radians and then calculate altitude angle and then convert back to degrees
+    latitude_rad = math.radians(latitude)
+    declination_rad = math.radians(declination)
+    H_rad = math.radians(H)
 
-    h = math.asin(math.sin(latitude) * math.sin(declination) + (math.cos(latitude) * math.cos(declination) * math.cos(H)))
-    # to do change everything to radians before doing math fucntions and convert back
+    h_rad = math.asin(math.sin(latitude_rad) * math.sin(declination_rad) + (math.cos(latitude_rad) * math.cos(declination_rad) * math.cos(H_rad)))
+
+    # Now back to degree convention
+    h = math.degrees(h_rad)
+
+    # same for azimuth calculation
+    azimuth_rad = math.atan2(-math.sin(H_rad) * math.cos(declination_rad),
+                            math.sin(declination_rad) * math.cos(latitude_rad)
+                            - math.cos(declination_rad) * math.sin(latitude_rad) * math.cos(H_rad)
+                        )
+
+    azimuth = math.degrees(azimuth_rad) % 360
+
+    print(f"UTC: {utc}")
+    print(f"JD: {JD}")
+    print(f"GMST: {gmst_deg}")
+    print(f"LST: {lst}")
+    print(f"RA: {right_ascension}")
+    print(f"H: {H}")
+
+    return h, azimuth
+
+
+
+
 
 
 

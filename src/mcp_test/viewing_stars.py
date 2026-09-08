@@ -1,4 +1,4 @@
-from .positions import get_viewing_time
+from mcp_test.positions import get_star_position
 
 import os, sys
 from mcp.server import MCPServer
@@ -136,7 +136,7 @@ def get_stars_and_planets(city:str, state:str, country:str):
     params = {
         "lat": lat,
         "lon": lon,
-        "time": datetime.combine(datetime.today().date(), time(19,30,0),tzinfo=IST_zone).isoformat()
+        "time": datetime.now(timezone.utc).isoformat()
     }
     response = w_cached.get(url,params=params)
     r = response.json()
@@ -158,7 +158,9 @@ def get_stars_and_planets(city:str, state:str, country:str):
                     break
 
     # get the viewing time range at night for the stars
-    view_time = get_viewing_time(dynamic_lists['star'], lat, lon)
+    position = get_star_position(dynamic_lists['star'][0], lat, lon)
+
+    print(f"{dynamic_lists['star'][0]}, calculated altitude deg: {position[0]}, calculated azimuth deg: {position[1]}")
 
     
 
