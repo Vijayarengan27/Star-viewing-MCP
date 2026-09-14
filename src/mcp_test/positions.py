@@ -1,85 +1,101 @@
 import datetime
+from datetime import timedelta
 import math
 
-def get_star_position(stars: list[dict], latitude: int, longitude: int):
+def get_star_position(stars: list[dict], latitude: float, longitude: float, sunset: datetime, sunrise: datetime) -> list[dict]:
     """ Calculates the relative positions of the stars and charts the movement of them for the
-    entire night time for a particular location"""
+    entire night time for a particular location and returns a tuple of altitude angle and azimuth angle"""
 
     # using date and time, calculate greenwich sidereal time and using the longitude, calculate the local
     # sidereal time, then using right ascension, find the hour angle,
     # then using hour angle, latitude and the declination angle, start finding the local paramters of the star
     # altitude and azimuth angles, do this for tmie interval of your choice.
 
-    utc = datetime.datetime.now(datetime.UTC)
+    # flow of the function -> calculate time stamps for every 15 minutes from sunset to sunrise and then caculate and store
+    # local sidereal time for those intervals and for every star caculate the altitude and azimuth anagles from observer position.
+    
+    current = sunset
+    end = sunrise
+    time_list = []  # time list for checking time
+    lst_list = []  # local sidereal time list for evry 15 minutes
 
-    year = utc.year
-    month = utc.month
-    day = utc.day
-    time = str(utc.time()).split(':')
+    while current <= end:
 
-    if month <= 2:
-        year -= 1
-        month += 12
+        year = current.year
+        month = current.month
 
-    s = 3600  # total seconds in an hour
-    d = 0  # rest of the current day variable
+        if month <= 2:
+            year -= 1
+            month += 12
 
-    for t in time:
-        d += (float(t) * s)
-        s //= 60
+        day = current.day + (current.hour / 24) + (current.minute / 1440) + (current.second / 86400)  # caculate day variable that gives you the amount of day progressed so far
+        
 
-    day += (d/(3600*24))  # total days
+        A = year // 100
+        B = 2 - A + (A//4)
 
-    A = year // 100
-    B = 2 - A + (A//4)
+        JD = math.floor(365.25 * (year + 4716)) + math.floor(30.6001 * (month + 1)) + day + B - 1524.5  # Julian Date
 
-    JD = math.floor(365.25 * (year + 4716)) + math.floor(30.6001 * (month + 1)) + day + B - 1524.5  # Julian Date
+        # calculate the Julian time in centuries since JD 2000.0
+        T = (JD - 2451545) / 36525
 
-    # calculate the Julian time in centuries since JD 2000.0
-    T = (JD - 2451545) / 36525
+        # caculate greenwich mean sidereal time in degrees
+        gmst_deg = 280.46061837 + (360.98564736629 * (JD - 2451545)) + (0.000387933 * (T ** 2)) - ((T ** 3)/ 38710000)
 
-    # caculate greenwich mean sidereal time in degrees
-    gmst_deg = 280.46061837 + (360.98564736629 * (JD - 2451545)) + (0.000387933 * (T ** 2)) - ((T ** 3)/ 38710000)
+        # normalize it
+        gmst_deg %= 360
 
-    # normalize it
-    gmst_deg %= 360
+        # local sidereal time in degrees and normalized
+        lst = (gmst_deg + longitude) % 360
 
-    # local sidereal time in degrees and normalized
-    lst = (gmst_deg + longitude) % 360
+        time_list.append(current)
+        lst_list.append(lst)
 
-    # Hour angle in degrees for each star and normalized
-    right_ascension = stars.get('ra_deg', None)
-    H = (lst - right_ascension + 180) % 360 - 180
+        if current == end:  # if we already reach end (sunrise), we break the loop
+            break
 
-    # get declination of the star - range [-90, 90], no need to normalize here
-    declination = stars.get('dec_deg', None)
+        current = min(current + timedelta(minutes=15), end)  # either 15 minute interval or the sunrise, whichebver arrives early
 
-    # altitude angle calculation, convert relevant angles to radians and then calculate altitude angle and then convert back to degrees
-    latitude_rad = math.radians(latitude)
-    declination_rad = math.radians(declination)
-    H_rad = math.radians(H)
+    for star in stars:
+        right_ascension = star.get('ra_deg', None)
 
-    h_rad = math.asin(math.sin(latitude_rad) * math.sin(declination_rad) + (math.cos(latitude_rad) * math.cos(declination_rad) * math.cos(H_rad)))
+        # get declination of the star - range [-90, 90], no need to normalize here
+        declination = star.get('dec_deg', None)
+        declination_rad = math.radians(declination)  # used in radians in the altitude angle calculation
+        latitude_rad = math.radians(latitude)  # used un radians for altitude angle caculation
 
-    # Now back to degree convention
-    h = math.degrees(h_rad)
+        h_list, azimuth_list = [], []
 
-    # same for azimuth calculation
-    azimuth_rad = math.atan2(-math.sin(H_rad) * math.cos(declination_rad),
-                            math.sin(declination_rad) * math.cos(latitude_rad)
-                            - math.cos(declination_rad) * math.sin(latitude_rad) * math.cos(H_rad)
-                        )
+        for lst in lst_list:
 
-    azimuth = math.degrees(azimuth_rad) % 360
+            # Hour angle in degrees for each star and normalized
+            H = (lst - right_ascension + 180) % 360 - 180
 
-    print(f"UTC: {utc}")
-    print(f"JD: {JD}")
-    print(f"GMST: {gmst_deg}")
-    print(f"LST: {lst}")
-    print(f"RA: {right_ascension}")
-    print(f"H: {H}")
+            # altitude angle calculation, convert relevant hour angle to radians and then calculate altitude angle and then convert back to degrees
+            H_rad = math.radians(H)
 
-    return h, azimuth
+            h_rad = math.asin(math.sin(latitude_rad) * math.sin(declination_rad) + (math.cos(latitude_rad) * math.cos(declination_rad) * math.cos(H_rad)))
+
+            # Now back to degree convention
+            h = math.degrees(h_rad)
+
+            # same for azimuth calculation
+            azimuth_rad = math.atan2(-math.sin(H_rad) * math.cos(declination_rad),
+                                    math.sin(declination_rad) * math.cos(latitude_rad)
+                                    - math.cos(declination_rad) * math.sin(latitude_rad) * math.cos(H_rad)
+                                )
+
+            azimuth = math.degrees(azimuth_rad) % 360
+
+            h_list.append(h)
+            azimuth_list.append(azimuth)
+
+        star["positions"] = {"time": time_list,
+                            "altitude": h_list,
+                            "azimuth": azimuth_list
+                            }
+
+    return stars
 
 
 
@@ -93,5 +109,5 @@ def get_star_position(stars: list[dict], latitude: int, longitude: int):
         
 
 if __name__ == "__main__":
-    get_viewing_time([],0,0)
+    get_star_position([],0,0)
 
