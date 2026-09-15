@@ -124,12 +124,12 @@ def get_stars_and_planets(city:str, state:str, country:str):
         "timezone": "auto"}
 
     response = w_cached.get(url, params = params)
-    response = response.json()
+    data = response.json()
 
     # process the sunset and sunsrise from json output, that is in iso8601 format
-    sunset = response.get('sunset')[0]  # today's sunset
-    sunrise = response.get('sunrise')[1]  # tomorrow's sunrise
-
+    sunset = data['daily']['sunset'][0]  # today's sunset
+    sunrise = data['daily']['sunrise'][1]  # tomorrow's sunrise
+    print(f"data: {data}")
 
     # get the visible objects in the night sky at the given time
     url = "https://spacecatalog.org/api/v1/visible"
@@ -165,7 +165,7 @@ def get_stars_and_planets(city:str, state:str, country:str):
 
     print(f"dynamic lists: {dynamic_lists}\n")
     # get the viewing time range at night for the stars
-    position = get_star_position(dynamic_lists['star'][0], lat, lon,sunset, sunrise)
+    position = get_star_position([dynamic_lists['star'][0]], lat, lon,sunset, sunrise)
 
     print(f"star hashmap : {position}")
 
@@ -178,7 +178,7 @@ def get_stars_and_planets(city:str, state:str, country:str):
 
 
 if __name__ == "__main__":
-    get_stars_and_planets("Hyderabad", "Telangana", "india")
+    get_stars_and_planets("Tiruchirappalli", "Tamil nadu", "india")
 
 
      

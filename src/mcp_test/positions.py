@@ -56,7 +56,10 @@ def get_star_position(stars: list[dict], latitude: float, longitude: float, suns
 
         current = min(current + timedelta(minutes=15), end)  # either 15 minute interval or the sunrise, whichebver arrives early
 
+    print(f"local sidereal time -> {lst_list}\n")
+    print(f"stars -> {stars}")
     for star in stars:
+
         right_ascension = star.get('ra_deg', None)
 
         # get declination of the star - range [-90, 90], no need to normalize here
