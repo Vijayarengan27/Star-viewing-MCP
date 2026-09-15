@@ -123,9 +123,12 @@ def get_stars_and_planets(city:str, state:str, country:str):
         "daily": ["sunrise", "sunset"],
         "timezone": "auto"}
 
-    responses = w_cached.get(url, params = params)
+    response = w_cached.get(url, params = params)
+    response = response.json()
 
-    # process the sunset and sunsrise from json output
+    # process the sunset and sunsrise from json output, that is in iso8601 format
+    sunset = response.get('sunset')[0]  # today's sunset
+    sunrise = response.get('sunrise')[1]  # tomorrow's sunrise
 
 
     # get the visible objects in the night sky at the given time
@@ -134,12 +137,16 @@ def get_stars_and_planets(city:str, state:str, country:str):
     params = {
         "lat": lat,
         "lon": lon,
-        "time": datetime.now(timezone.utc).isoformat()
-    }
+        "time": sunset
+    } 
 
     response = w_cached.get(url,params=params)
     r = response.json()
-    print(r)
+    print(f"visible objects catalog: {r}\n")
+
+    # convert sunset and sunrise to datetime objects
+    sunrise = datetime.fromisoformat(sunrise)
+    sunset = datetime.fromisoformat(sunset)
 
     with open("src\\mcp_test\\objects.yml", "r") as f:
         data = yaml.safe_load(f)
@@ -156,10 +163,11 @@ def get_stars_and_planets(city:str, state:str, country:str):
                     dynamic_lists[key].append(rep)
                     break
 
+    print(f"dynamic lists: {dynamic_lists}\n")
     # get the viewing time range at night for the stars
-    position = get_star_position(dynamic_lists['star'][0], lat, lon)
+    position = get_star_position(dynamic_lists['star'][0], lat, lon,sunset, sunrise)
 
-    print(f"{dynamic_lists['star'][0]}, calculated altitude deg: {position[0]}, calculated azimuth deg: {position[1]}")
+    print(f"star hashmap : {position}")
 
     
 
