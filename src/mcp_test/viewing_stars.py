@@ -102,7 +102,7 @@ def get_weather(city:str, state:str, country:str):
         "longitude": lon,
         "daily": ["uv_index_max", "sunrise", "sunset", "moonrise", "moonset"],
         "current": ["temperature_2m", "relative_humidity_2m", "apparent_temperature", "wind_speed_10m", "wind_direction_10m", "rain", "precipitation"],
-        "timezone": "Asia/Singapore"}
+        "timezone": "auto"}
     responses = w_cached.get(url, params = params)
     return responses.json()
 
@@ -111,33 +111,32 @@ def get_stars_and_planets(city:str, state:str, country:str):
     """ Gets visible stars and planets for the given location that can be seen at the night and their
     respective constellations"""
 
+    # get the latitude and longitude of the observer location
+    lat, lon = _get_location(city, state, country)
+
+    # need the sunset and sunrise of the current day
+    url = "https://api.open-meteo.com/v1/forecast"
+
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "daily": ["sunrise", "sunset"],
+        "timezone": "auto"}
+
+    responses = w_cached.get(url, params = params)
+
+    # process the sunset and sunsrise from json output
+
+
+    # get the visible objects in the night sky at the given time
     url = "https://spacecatalog.org/api/v1/visible"
-    addy = [city, state, country]
-    
-    query_params = {
-    "name": ', '.join(addy),
-    "count": 1,          # Number of search results to return
-    "language": "en",
-    "format": "json"}
 
-    response = cached.get(
-        "https://geocoding-api.open-meteo.com/v1/search",
-        params=query_params
-    )
-
-    if response.status_code == 200:
-        data = response.json()
-        
-    # Extract results array
-    results = data.get("results", [])
-    for spot in results:  # just running for one as of now
-        lat = spot.get("latitude")
-        lon = spot.get("longitude")
     params = {
         "lat": lat,
         "lon": lon,
         "time": datetime.now(timezone.utc).isoformat()
     }
+
     response = w_cached.get(url,params=params)
     r = response.json()
     print(r)
