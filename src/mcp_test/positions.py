@@ -1,10 +1,11 @@
 import datetime
-from datetime import timedelta
+from datetime import timedelta, datetime
 import math
 
-def get_star_position(stars: list[dict], latitude: float, longitude: float, sunset: datetime, sunrise: datetime) -> list[dict]:
+def get_star_position(stars: list[dict], latitude: float, longitude: float, sunset: datetime, sunrise: datetime, cloud_cover: dict) -> list[dict]:
     """ Calculates the relative positions of the stars and charts the movement of them for the
-    entire night time for a particular location and returns a tuple of altitude angle and azimuth angle"""
+    entire night time for a particular location and returns a relevant hashmap including altitude angle and azimuth angle
+    for every 15 minute interval"""
 
     # using date and time, calculate greenwich sidereal time and using the longitude, calculate the local
     # sidereal time, then using right ascension, find the hour angle,
@@ -12,7 +13,8 @@ def get_star_position(stars: list[dict], latitude: float, longitude: float, suns
     # altitude and azimuth angles, do this for tmie interval of your choice.
 
     # flow of the function -> calculate time stamps for every 15 minutes from sunset to sunrise and then caculate and store
-    # local sidereal time for those intervals and for every star caculate the altitude and azimuth anagles from observer position.
+    # local sidereal time for those intervals and for every star caculate the altitude and azimuth anagles from observer position
+    # add extra info regarding the first observable and last observable times, cloud cover and above or below horizon.
     
     current = sunset
     end = sunrise
@@ -56,8 +58,6 @@ def get_star_position(stars: list[dict], latitude: float, longitude: float, suns
 
         current = min(current + timedelta(minutes=15), end)  # either 15 minute interval or the sunrise, whichebver arrives early
 
-    print(f"local sidereal time -> {lst_list}\n")
-    print(f"stars -> {stars}")
     for star in stars:
 
         right_ascension = star.get('ra_deg', None)
@@ -67,9 +67,12 @@ def get_star_position(stars: list[dict], latitude: float, longitude: float, suns
         declination_rad = math.radians(declination)  # used in radians in the altitude angle calculation
         latitude_rad = math.radians(latitude)  # used un radians for altitude angle caculation
 
-        h_list, azimuth_list = [], []
+        positional_observation = []
+        first, last = None, None
 
-        for lst in lst_list:
+        for i in range(len(lst_list)):
+
+            lst = lst_list[i]  # easier for indexing normal time too
 
             # Hour angle in degrees for each star and normalized
             H = (lst - right_ascension + 180) % 360 - 180
@@ -90,14 +93,48 @@ def get_star_position(stars: list[dict], latitude: float, longitude: float, suns
 
             azimuth = math.degrees(azimuth_rad) % 360
 
-            h_list.append(h)
-            azimuth_list.append(azimuth)
+            position = {}
+            position['time'] = time_list[i].isoformat()
+            position['altiude'] = h
+            position['azimuth'] = azimuth
+            position['observable'] = False  # default will be changed if altitude is greater than 10 degrees
+            position['cloud cover'] = cloud_cover.get((time_list[i].day, time_list[i].hour), 'No information available')
 
-        star["positions"] = {"time": time_list,
-                            "altitude": h_list,
-                            "azimuth": azimuth_list
-                            }
 
+            # observable and above horizon logic
+            if h >= 0:
+                position['above_horizon'] = True
+                if h >= 10:
+                    position['observable'] = True
+            else:
+                position['above_horizon'] = False
+
+
+            # first and last observable times
+            if position['observable']:
+                if first is None:
+                    first = time_list[i].isoformat()
+            else:
+                if first is not None and last is None:
+                    last = time_list[i].isoformat()
+
+            
+
+
+            positional_observation.append(position)
+                
+
+        star["positions"] = positional_observation
+        if first is None:
+            star["first observable time"] = "No information"
+        else:
+            star["first observable time"] = first
+
+        if last is None:
+            star["last observable time"] = "No information"
+        else:
+            star["last observable time"] = last
+            
     return stars
 
 

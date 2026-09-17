@@ -17,7 +17,7 @@ import yaml
 load_dotenv()
 
 mcp = MCPServer("nasa_test")
-cached = requests_cache.CachedSession('nasa_cache',expire_after=3600)  # caches the photo for an hour
+cached = requests_cache.CachedSession('nasa_cache',expire_after=216000)  # caches the photo for a day
 w_cached = requests_cache.CachedSession('weather_cache', expire_after=900)  # cache for weather info
 IST_zone = timezone(timedelta(hours=5, minutes=30))  # helpful in calculating the indian time 
 
@@ -106,6 +106,30 @@ def get_weather(city:str, state:str, country:str):
     responses = w_cached.get(url, params = params)
     return responses.json()
 
+def get_cloud_cover(lat: float , lon: float , sunset: datetime, sunrise: datetime):
+    # get the latitude and longitude of the observer location
+
+    # need the sunset and sunrise of the current day
+    url = "https://api.open-meteo.com/v1/forecast"
+
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "hourly": "cloud_cover",
+        "timezone": "auto"
+    }
+
+    response = w_cached.get(url, params = params)
+    data = response.json()
+
+    dict = {(datetime.fromisoformat(x).day,datetime.fromisoformat(x).hour) : cc for x,cc in zip(data['hourly']['time'], data['hourly']['cloud_cover']) }
+
+    start = (sunset.day, sunset.hour)
+    end = (sunrise.day, sunrise.hour)
+
+    cloud_cover = {key:value for key,value in dict.items() if start <= key <= end}
+    return cloud_cover
+
 
 def get_stars_and_planets(city:str, state:str, country:str):
     """ Gets visible stars and planets for the given location that can be seen at the night and their
@@ -163,9 +187,12 @@ def get_stars_and_planets(city:str, state:str, country:str):
                     dynamic_lists[key].append(rep)
                     break
 
-    print(f"dynamic lists: {dynamic_lists}\n")
+    # get cloud cover for the given time range
+    cloud_cover = get_cloud_cover(lat, lon, sunset, sunrise)
+
     # get the viewing time range at night for the stars
-    position = get_star_position([dynamic_lists['star'][0]], lat, lon,sunset, sunrise)
+    position = get_star_position([dynamic_lists['star'][0]], lat, lon, sunset, sunrise, cloud_cover)
+    
 
     print(f"star hashmap : {position}")
 
@@ -179,6 +206,7 @@ def get_stars_and_planets(city:str, state:str, country:str):
 
 if __name__ == "__main__":
     get_stars_and_planets("Tiruchirappalli", "Tamil nadu", "india")
+    # get_cloud_cover("Tiruchirappalli", "Tamil nadu", "india", datetime.now(), datetime.now() + timedelta(hours=12))
 
 
      
