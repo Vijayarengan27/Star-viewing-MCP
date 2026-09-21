@@ -1,4 +1,4 @@
-from mcp_test.positions import get_star_position
+from mcp_test.positions import get_star_position, local_sidereal_and_isotime_calc
 
 import os, sys
 from mcp.server import MCPServer
@@ -131,6 +131,36 @@ def get_cloud_cover(lat: float , lon: float , sunset: datetime, sunrise: datetim
     return cloud_cover
 
 
+def get_star_hashmaps(lat:float, lon:float, sunset: datetime.isoformat) -> list[dict]:
+    """ Runs the api for the favorite stars provided in the objects.yml file and returns the
+    json response from the requests"""
+
+    star_list = []
+
+    with open("src\\mcp_test\\objects.yml", "r") as f:
+            data = yaml.safe_load(f)
+    
+    wanted = {key : set(values) for key,values in data.items()}
+    params = {
+            "lat": lat,
+            "lon": lon,
+            "time": sunset
+        } 
+
+    stars = [star for star_set in wanted.values() for star in star_set]
+    for slug in stars:
+        print(slug)
+        url = f"https://spacecatalog.org/api/v1/objects/{slug.lower()}"
+        response = w_cached.get(url,params=params)
+        r = response.json()
+        star_list.append(r)
+    return star_list
+
+
+
+
+
+
 def get_stars_and_planets(city:str, state:str, country:str):
     """ Gets visible stars and planets for the given location that can be seen at the night and their
     respective constellations"""
@@ -156,45 +186,25 @@ def get_stars_and_planets(city:str, state:str, country:str):
     print(f"data: {data}")
 
     # get the visible objects in the night sky at the given time
-    url = "https://spacecatalog.org/api/v1/visible"
-
-    params = {
-        "lat": lat,
-        "lon": lon,
-        "time": sunset
-    } 
-
-    response = w_cached.get(url,params=params)
-    r = response.json()
-    print(f"visible objects catalog: {r}\n")
+    dynamic_list = get_star_hashmaps(lat, lon, sunset)
+    
 
     # convert sunset and sunrise to datetime objects
     sunrise = datetime.fromisoformat(sunrise)
     sunset = datetime.fromisoformat(sunset)
 
-    with open("src\\mcp_test\\objects.yml", "r") as f:
-        data = yaml.safe_load(f)
-
-    wanted = {key : set(values) for key,values in data.items()}
-    dynamic_lists = {}
-
-    for key in wanted.keys():
-        dynamic_lists[key] = []
-        for val in wanted[key]:
-            for rep in r.get('objects',[]):
-
-                if key.lower() == rep.get('category').lower() and val.lower() == rep.get('name').lower():
-                    dynamic_lists[key].append(rep)
-                    break
+    
 
     # get cloud cover for the given time range
     cloud_cover = get_cloud_cover(lat, lon, sunset, sunrise)
 
-    # get the viewing time range at night for the stars
-    position = get_star_position([dynamic_lists['star'][0]], lat, lon, sunset, sunrise, cloud_cover)
-    
+    # get the local sidereal time lists and isoformat time for 15 minute intervals from sunset to sunrise
+    time_list, lst_list = local_sidereal_and_isotime_calc(sunset, sunrise, lon)
 
-    print(f"star hashmap : {position}")
+    # get the viewing time range at night for the stars
+    position = get_star_position(dynamic_list, lat, lon, cloud_cover, time_list, lst_list)
+    
+    return position
 
     
 
@@ -205,7 +215,7 @@ def get_stars_and_planets(city:str, state:str, country:str):
 
 
 if __name__ == "__main__":
-    get_stars_and_planets("Tiruchirappalli", "Tamil nadu", "india")
+    print(get_stars_and_planets("Tiruchirappalli", "Tamil nadu", "india"))
     # get_cloud_cover("Tiruchirappalli", "Tamil nadu", "india", datetime.now(), datetime.now() + timedelta(hours=12))
 
 

@@ -2,20 +2,10 @@ import datetime
 from datetime import timedelta, datetime
 import math
 
-def get_star_position(stars: list[dict], latitude: float, longitude: float, sunset: datetime, sunrise: datetime, cloud_cover: dict) -> list[dict]:
-    """ Calculates the relative positions of the stars and charts the movement of them for the
-    entire night time for a particular location and returns a relevant hashmap including altitude angle and azimuth angle
-    for every 15 minute interval"""
+def local_sidereal_and_isotime_calc(sunset:datetime, sunrise:datetime, longitude:float):
+    """Caculates the local sidereal and iso format time for the 15 minute intervals separately and 
+    returns both lists"""
 
-    # using date and time, calculate greenwich sidereal time and using the longitude, calculate the local
-    # sidereal time, then using right ascension, find the hour angle,
-    # then using hour angle, latitude and the declination angle, start finding the local paramters of the star
-    # altitude and azimuth angles, do this for tmie interval of your choice.
-
-    # flow of the function -> calculate time stamps for every 15 minutes from sunset to sunrise and then caculate and store
-    # local sidereal time for those intervals and for every star caculate the altitude and azimuth anagles from observer position
-    # add extra info regarding the first observable and last observable times, cloud cover and above or below horizon.
-    
     current = sunset
     end = sunrise
     time_list = []  # time list for checking time
@@ -56,9 +46,30 @@ def get_star_position(stars: list[dict], latitude: float, longitude: float, suns
         if current == end:  # if we already reach end (sunrise), we break the loop
             break
 
-        current = min(current + timedelta(minutes=15), end)  # either 15 minute interval or the sunrise, whichebver arrives early
+        current = min(current + timedelta(minutes=15), end)  # either 15 minute interval or the sunrise, whichever arrives early
 
+    return time_list, lst_list
+
+
+def get_star_position(stars: list[dict], latitude: float, longitude: float, cloud_cover: dict, time_list: list, lst_list: list) -> list[dict]:
+    """ Calculates the relative positions of the stars and charts the movement of them for the
+    entire night time for a particular location and returns a relevant hashmap including altitude angle and azimuth angle
+    for every 15 minute interval"""
+
+    # using date and time, calculate greenwich sidereal time and using the longitude, calculate the local
+    # sidereal time, then using right ascension, find the hour angle,
+    # then using hour angle, latitude and the declination angle, start finding the local paramters of the star
+    # altitude and azimuth angles, do this for tmie interval of your choice.
+
+    # flow of the function -> calculate time stamps for every 15 minutes from sunset to sunrise and then caculate and store
+    # local sidereal time for those intervals and for every star caculate the altitude and azimuth anagles from observer position
+    # add extra info regarding the first observable and last observable times, cloud cover and above or below horizon.
+    
+    
+    star_hashmaps = []
     for star in stars:
+        if star.get('error', None) is not None:  # if there is an error in getting the slug information, we skip
+            continue
 
         right_ascension = star.get('ra_deg', None)
 
@@ -68,6 +79,8 @@ def get_star_position(stars: list[dict], latitude: float, longitude: float, suns
         latitude_rad = math.radians(latitude)  # used un radians for altitude angle caculation
 
         positional_observation = []
+        star_info = {}
+        required_fields = ['name', 'class', 'category', 'mag', 'mag_band', 'constellation']
         first, last = None, None
 
         for i in range(len(lst_list)):
@@ -123,19 +136,23 @@ def get_star_position(stars: list[dict], latitude: float, longitude: float, suns
 
             positional_observation.append(position)
                 
+        for field in required_fields:
+            star_info[field] = star[field]
 
-        star["positions"] = positional_observation
+        star_info["positions"] = positional_observation
         if first is None:
-            star["first observable time"] = "No information"
+            star_info["first observable time"] = "No information"
         else:
-            star["first observable time"] = first
+            star_info["first observable time"] = first
 
         if last is None:
-            star["last observable time"] = "No information"
+            star_info["last observable time"] = "No information"
         else:
-            star["last observable time"] = last
+            star_info["last observable time"] = last
+
+        star_hashmaps.append(star_info)
             
-    return stars
+    return star_hashmaps
 
 
 

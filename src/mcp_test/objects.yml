@@ -1,5 +1,4 @@
 star:
-  - Sun
   - Betelgeuse
   - Rigel
   - Arcturus
@@ -22,17 +21,7 @@ star:
   - Kochab
   - Enif
   - Rasalhague
-  - Kaus Australis
-
-planet:
-  - Mercury
-  - Venus
-  - Mars
-  - Jupiter
-  - Saturn
-  - Uranus
-  - Neptune
-  - Pluto
+  - kaus-australis
 
 
 
