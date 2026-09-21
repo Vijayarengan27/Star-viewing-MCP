@@ -90,6 +90,7 @@ def _get_location(city:str, state:str, country:str):
         lon = spot.get("longitude")
 
     return lat, lon
+
         
 @mcp.tool()
 def get_weather(city:str, state:str, country:str):
@@ -105,6 +106,7 @@ def get_weather(city:str, state:str, country:str):
         "timezone": "auto"}
     responses = w_cached.get(url, params = params)
     return responses.json()
+
 
 def get_cloud_cover(lat: float , lon: float , sunset: datetime, sunrise: datetime):
     # get the latitude and longitude of the observer location
@@ -131,7 +133,7 @@ def get_cloud_cover(lat: float , lon: float , sunset: datetime, sunrise: datetim
     return cloud_cover
 
 
-def get_star_hashmaps(lat:float, lon:float, sunset: datetime.isoformat) -> list[dict]:
+def get_star_hashmaps(lat:float, lon:float, sunset: str) -> list[dict]:
     """ Runs the api for the favorite stars provided in the objects.yml file and returns the
     json response from the requests"""
 
@@ -149,7 +151,6 @@ def get_star_hashmaps(lat:float, lon:float, sunset: datetime.isoformat) -> list[
 
     stars = [star for star_set in wanted.values() for star in star_set]
     for slug in stars:
-        print(slug)
         url = f"https://spacecatalog.org/api/v1/objects/{slug.lower()}"
         response = w_cached.get(url,params=params)
         r = response.json()
@@ -160,7 +161,7 @@ def get_star_hashmaps(lat:float, lon:float, sunset: datetime.isoformat) -> list[
 
 
 
-
+@mcp.tool()
 def get_stars_and_planets(city:str, state:str, country:str):
     """ Gets visible stars and planets for the given location that can be seen at the night and their
     respective constellations"""
@@ -183,15 +184,21 @@ def get_stars_and_planets(city:str, state:str, country:str):
     # process the sunset and sunsrise from json output, that is in iso8601 format
     sunset = data['daily']['sunset'][0]  # today's sunset
     sunrise = data['daily']['sunrise'][1]  # tomorrow's sunrise
-    print(f"data: {data}")
+    print(sunset)
+
+    offset_seconds = data.get("utc_offset_seconds", 0)  # to subtract to the datetime variables to get UTC time
+    tz = timezone(timedelta(seconds=offset_seconds))
 
     # get the visible objects in the night sky at the given time
-    dynamic_list = get_star_hashmaps(lat, lon, sunset)
+    dynamic_list = get_star_hashmaps(lat, lon, sunset)  # need timezone aware sunset time, 
+                                                                             # since space catlog assumes any datetime sent as UTC
     
 
     # convert sunset and sunrise to datetime objects
     sunrise = datetime.fromisoformat(sunrise)
     sunset = datetime.fromisoformat(sunset)
+    sunrise = sunrise.replace(tzinfo=tz)  # need this to correctly calculate the gmst 
+    sunset = sunset.replace(tzinfo=tz)  # need this to correctly calculate the gmst 
 
     
 
@@ -199,10 +206,10 @@ def get_stars_and_planets(city:str, state:str, country:str):
     cloud_cover = get_cloud_cover(lat, lon, sunset, sunrise)
 
     # get the local sidereal time lists and isoformat time for 15 minute intervals from sunset to sunrise
-    time_list, lst_list = local_sidereal_and_isotime_calc(sunset, sunrise, lon)
+    time_list, lst_list = local_sidereal_and_isotime_calc(sunset, sunrise, lon, offset_seconds)
 
     # get the viewing time range at night for the stars
-    position = get_star_position(dynamic_list, lat, lon, cloud_cover, time_list, lst_list)
+    position = get_star_position([dynamic_list[0]], lat, lon, cloud_cover, time_list, lst_list)
     
     return position
 
@@ -215,10 +222,4 @@ def get_stars_and_planets(city:str, state:str, country:str):
 
 
 if __name__ == "__main__":
-    print(get_stars_and_planets("Tiruchirappalli", "Tamil nadu", "india"))
-    # get_cloud_cover("Tiruchirappalli", "Tamil nadu", "india", datetime.now(), datetime.now() + timedelta(hours=12))
-
-
-     
-    
-
+    mcp.run(transport='stdio')

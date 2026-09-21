@@ -2,8 +2,8 @@ import datetime
 from datetime import timedelta, datetime
 import math
 
-def local_sidereal_and_isotime_calc(sunset:datetime, sunrise:datetime, longitude:float):
-    """Caculates the local sidereal and iso format time for the 15 minute intervals separately and 
+def local_sidereal_and_isotime_calc(sunset:datetime, sunrise:datetime, longitude:float, offset_seconds: int):
+    """Calculates the local sidereal and iso format time for the 15 minute intervals separately and 
     returns both lists"""
 
     current = sunset
@@ -21,12 +21,12 @@ def local_sidereal_and_isotime_calc(sunset:datetime, sunrise:datetime, longitude
             month += 12
 
         day = current.day + (current.hour / 24) + (current.minute / 1440) + (current.second / 86400)  # caculate day variable that gives you the amount of day progressed so far
-        
+        utc_day = day - (offset_seconds / 86400)
 
         A = year // 100
         B = 2 - A + (A//4)
 
-        JD = math.floor(365.25 * (year + 4716)) + math.floor(30.6001 * (month + 1)) + day + B - 1524.5  # Julian Date
+        JD = math.floor(365.25 * (year + 4716)) + math.floor(30.6001 * (month + 1)) + utc_day + B - 1524.5  # Julian Date calculation always for utc
 
         # calculate the Julian time in centuries since JD 2000.0
         T = (JD - 2451545) / 36525
@@ -81,19 +81,22 @@ def get_star_position(stars: list[dict], latitude: float, longitude: float, clou
         positional_observation = []
         star_info = {}
         required_fields = ['name', 'class', 'category', 'mag', 'mag_band', 'constellation']
-        first, last = None, None
+        first_obs = None
+        last_obs = None
 
         for i in range(len(lst_list)):
 
             lst = lst_list[i]  # easier for indexing normal time too
 
             # Hour angle in degrees for each star and normalized
-            H = (lst - right_ascension + 180) % 360 - 180
+            H = (lst - right_ascension) % 360
 
             # altitude angle calculation, convert relevant hour angle to radians and then calculate altitude angle and then convert back to degrees
             H_rad = math.radians(H)
 
-            h_rad = math.asin(math.sin(latitude_rad) * math.sin(declination_rad) + (math.cos(latitude_rad) * math.cos(declination_rad) * math.cos(H_rad)))
+            sin_h_rad = math.sin(latitude_rad) * math.sin(declination_rad) + (math.cos(latitude_rad) * math.cos(declination_rad) * math.cos(H_rad))
+            sin_h_rad = max(-1.0, min(1.0, sin_h_rad))
+            h_rad = math.asin(sin_h_rad)
 
             # Now back to degree convention
             h = math.degrees(h_rad)
@@ -104,11 +107,11 @@ def get_star_position(stars: list[dict], latitude: float, longitude: float, clou
                                     - math.cos(declination_rad) * math.sin(latitude_rad) * math.cos(H_rad)
                                 )
 
-            azimuth = math.degrees(azimuth_rad) % 360
+            azimuth = math.degrees(azimuth_rad + 360) % 360
 
             position = {}
             position['time'] = time_list[i].isoformat()
-            position['altiude'] = h
+            position['altitude'] = h
             position['azimuth'] = azimuth
             position['observable'] = False  # default will be changed if altitude is greater than 10 degrees
             position['cloud cover'] = cloud_cover.get((time_list[i].day, time_list[i].hour), 'No information available')
@@ -125,30 +128,19 @@ def get_star_position(stars: list[dict], latitude: float, longitude: float, clou
 
             # first and last observable times
             if position['observable']:
-                if first is None:
-                    first = time_list[i].isoformat()
-            else:
-                if first is not None and last is None:
-                    last = time_list[i].isoformat()
+                if first_obs is None:
+                    first_obs = position['time']
+                last_obs = position['time']  # Continuously update last_obs while observable
 
             
-
-
             positional_observation.append(position)
                 
         for field in required_fields:
-            star_info[field] = star[field]
+            star_info[field] = star.get(field, "N/A")
 
         star_info["positions"] = positional_observation
-        if first is None:
-            star_info["first observable time"] = "No information"
-        else:
-            star_info["first observable time"] = first
-
-        if last is None:
-            star_info["last observable time"] = "No information"
-        else:
-            star_info["last observable time"] = last
+        star_info["first observable time"] = first_obs if first_obs else "No information"
+        star_info["last observable time"] = last_obs if last_obs else "No information"
 
         star_hashmaps.append(star_info)
             
