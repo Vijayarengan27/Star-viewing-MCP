@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "star-tracker": {
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "src/mcp_test/viewing_stars.py"
+      ],
+      "env": {
+        "PYTHONPATH": "src"
+      }
+    }
+  }
+}

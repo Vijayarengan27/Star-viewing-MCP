@@ -3,7 +3,7 @@ from mcp_test.positions import get_star_position, local_sidereal_and_isotime_cal
 import os, sys
 from mcp.server import MCPServer
 import requests
-from datetime import datetime, timedelta, time, timezone
+from datetime import datetime, timedelta, time, timezone, date
 
 from dotenv import load_dotenv
 import base64
@@ -11,11 +11,8 @@ import requests_cache
 import yaml
 from pathlib import Path
 
-
-
-
-
-load_dotenv()
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 mcp = MCPServer("star_tracker")
 cached = requests_cache.CachedSession('nasa_cache',expire_after=108000)  # caches the photo for half a day
@@ -56,7 +53,7 @@ def show_image_of_the_day() -> dict:
             text: if its a video, it will show the text with the url to play the video
             """
 
-    response = _get_image_of_the_day(datetime.date.today().isoformat())
+    response = _get_image_of_the_day(date.today().isoformat())
 
     result = [{"Title": response["title"], "Explanation": response["explanation"]}]
 
