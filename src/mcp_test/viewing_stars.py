@@ -173,37 +173,73 @@ def get_cloud_cover(lat: float , lon: float , sunset: datetime, sunrise: datetim
     return cloud_cover
 
 
-def get_star_hashmaps(lat:float, lon:float, sunset: str) -> list[dict]:
+def get_star_hashmaps(lat:float, lon:float, sunset: str, stars: list) -> list[dict]:
     """ Runs the api for the favorite stars provided in the objects.yml file and returns the
     json response from the requests"""
 
     star_list = []
+    params = {"lat": lat,
+              "lon": lon,
+              "time": sunset
+              }
+    yaml_path = Path("src") / "mcp_test" / "objects.yml"  # compatible with linux, dockers etc. as well 
 
-    yaml_path = Path("src") / "mcp_test" / "objects.yml"  # compatible with linux, dockers etc. as well
-    with open(yaml_path, "r") as f:
-            data = yaml.safe_load(f)
+    if stars is None:
+        with open(yaml_path, "r") as f:
+                data = yaml.safe_load(f)
+        
+        wanted = {key : set(values) for key,values in data.items()}
+        stars = [star for star_set in wanted.values() for star in star_set]
+
+        for slug in stars:
+            url = f"https://spacecatalog.org/api/v1/objects/{slug.lower()}"
+            response = w_cached.get(url,params=params)
+            r = response.json()
+            star_list.append(r)
+    else:
+        stars = [star.replace(" ", "-") for star in stars]  # any star with a space in them needs to have a dash in between as per the api
+        new_valid_stars = []
+
+        for slug in stars:
+            url = f"https://spacecatalog.org/api/v1/objects/{slug.lower()}"
+            response = w_cached.get(url,params=params)
+            if response.error_code == 200:  # we dont know whether the user supplied star names are correct or not
+                r = response.json()
+                star_list.append(r)
+                new_valid_stars.append(slug)
+
+        _append_new_stars(yaml_path, new_valid_stars)
     
-    wanted = {key : set(values) for key,values in data.items()}
-    params = {
-            "lat": lat,
-            "lon": lon,
-            "time": sunset
-        } 
-
-    stars = [star for star_set in wanted.values() for star in star_set]
-    for slug in stars:
-        url = f"https://spacecatalog.org/api/v1/objects/{slug.lower()}"
-        response = w_cached.get(url,params=params)
-        r = response.json()
-        star_list.append(r)
     return star_list
+
+
+def _append_new_stars(yaml_path: Path, new_stars: list[str]) -> None:
+    """ Appends the validated new stars queried by the user to the favorite objects yaml file"""
+
+    with open(yaml_path, 'r') as f:
+        data = yaml.safe_load() or {}
+
+    existing = data.setdefault('stars', [])  # get all the stars as a list
+    existing_lower = {s.lower() for s in existing}
+
+    added = False
+    for name in new_stars:
+        if name.lower() not in existing_lower:  # check in the lower case
+            existing.append(name)
+            existing_lower.add(name.lower())
+            added = True
+
+    if added:
+        with open(yaml_path, "w") as f:
+            yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)  # mutate the list in memeory and add it
+
 
 
 
 
 
 @mcp.tool()
-def get_stars_and_planets(city:str, state:str, country:str) -> list[dict]:
+def get_stars_and_planets(city:str, state:str, country:str, stars:list[str] = None) -> list[dict]:
     """
     Calculates visibility using cloud cover & magnitude, altitude, azimuth, observable windows, and constellation for stars between sunset and sunrise.
     Answers the question, "Which favorite stars/constellations that I can see today and in what time window?"
@@ -212,6 +248,7 @@ def get_stars_and_planets(city:str, state:str, country:str) -> list[dict]:
         city: The city you're going to watch the stars from
         state: The state in which the city is
         country: THe country in which the state is
+        stars: the list of stars that the user wants to know the position for today, usually they wont specify, if they do, we use that
 
     Output Args:
         Each element in the list contains these keys,
@@ -253,7 +290,7 @@ def get_stars_and_planets(city:str, state:str, country:str) -> list[dict]:
     tz = timezone(timedelta(seconds=offset_seconds))
 
     # get the visible objects in the night sky at the given time
-    dynamic_list = get_star_hashmaps(lat, lon, sunset)  # need timezone aware sunset time, 
+    dynamic_list = get_star_hashmaps(lat, lon, sunset, stars)  # need timezone aware sunset time, 
                                                                              # since space catlog assumes any datetime sent as UTC
     
 
